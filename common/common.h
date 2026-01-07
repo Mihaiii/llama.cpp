@@ -98,6 +98,7 @@ enum llama_example {
     LLAMA_EXAMPLE_LOOKUP,
     LLAMA_EXAMPLE_PARALLEL,
     LLAMA_EXAMPLE_TTS,
+    LLAMA_EXAMPLE_TTSV,
     LLAMA_EXAMPLE_DIFFUSION,
     LLAMA_EXAMPLE_FINETUNE,
     LLAMA_EXAMPLE_FIT_PARAMS,
@@ -551,6 +552,29 @@ struct common_params {
     dimre_method cvector_dimre_method = DIMRE_METHOD_PCA;
     std::string cvector_positive_file = "tools/cvector-generator/positive.txt";
     std::string cvector_negative_file = "tools/cvector-generator/negative.txt";
+
+    // ttsv params
+    std::string ttsv_prompts_file = "tools/ttsv/prompts.txt";
+    std::string ttsv_path         = "";
+    std::string ttsv_out          = "tools/ttsv/ttsv_prefix.bin";
+    std::string ttsv_style_pairs_file = "";
+    int32_t ttsv_prefix_length    = 20;
+    int32_t ttsv_epochs           = 5;
+    float   ttsv_lr               = 1e-3f;
+    float   ttsv_lr_min           = 1e-5f;
+    float   ttsv_weight_decay     = 1e-8f;
+    float   ttsv_eps              = 1e-5f;
+    float   ttsv_perturb          = 1e-3f;
+    float   ttsv_entropy_floor    = 0.05f;
+    float   ttsv_style_weight     = 0.0f;
+    float   ttsv_list_weight      = 0.0f;
+    float   ttsv_list_logit_bias  = 0.0f;
+    float   ttsv_style_embed_weight = 0.0f;
+    float   ttsv_repeat_weight    = 0.0f;
+    float   ttsv_style_nll_weight = 0.0f;
+    int32_t ttsv_collapse_patience = 2;
+    int32_t ttsv_collapse_window   = 6;
+    int32_t ttsv_seed             = 15;
 
     bool spm_infill = false; // suffix/prefix/middle pattern for infill
 

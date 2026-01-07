@@ -1103,6 +1103,33 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
     return res;
 }
 
+llm_graph_result * llama_context::build_graph_for_batch(const llama_ubatch & ubatch, llm_graph_type gtype, llama_memory_context_i * mctx, ggml_status & ret) {
+    if (mctx && !mctx->apply()) {
+        LLAMA_LOG_ERROR("%s: failed to apply memory context\n", __func__);
+        ret = GGML_STATUS_FAILED;
+        return nullptr;
+    }
+
+    auto * res = gf_res_prev.get();
+
+    res->reset();
+
+    ggml_backend_sched_reset(sched.get());
+    ggml_backend_sched_set_eval_callback(sched.get(), cparams.cb_eval, cparams.cb_eval_user_data);
+
+    const auto gparams = graph_params(res, ubatch, mctx, gtype);
+    auto * gf = model.build_graph(gparams);
+
+    if (!gf) {
+        LLAMA_LOG_ERROR("%s: failed to initialize graph\n", __func__);
+        ret = GGML_STATUS_FAILED;
+        return nullptr;
+    }
+
+    ret = GGML_STATUS_SUCCESS;
+    return res;
+}
+
 int llama_context::encode(const llama_batch & batch_inp) {
     GGML_ASSERT((!batch_inp.token && batch_inp.embd) || (batch_inp.token && !batch_inp.embd)); // NOLINT
 

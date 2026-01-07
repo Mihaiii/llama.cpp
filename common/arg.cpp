@@ -1254,7 +1254,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             params.system_prompt = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_DIFFUSION, LLAMA_EXAMPLE_MTMD}));
+    ).set_examples({LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_DIFFUSION, LLAMA_EXAMPLE_MTMD, LLAMA_EXAMPLE_TTSV}));
     add_opt(common_arg(
         {"--perf"},
         {"--no-perf"},
@@ -1293,7 +1293,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
                 params.system_prompt.pop_back();
             }
         }
-    ).set_examples({LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_DIFFUSION}));
+    ).set_examples({LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_DIFFUSION, LLAMA_EXAMPLE_TTSV}));
     add_opt(common_arg(
         {"--in-file"}, "FNAME",
         "an input file (use comma-separated values to specify multiple files)",
@@ -2859,7 +2859,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, bool value) {
             params.use_jinja = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_MTMD}).set_env("LLAMA_ARG_JINJA"));
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_MTMD, LLAMA_EXAMPLE_TTSV}).set_env("LLAMA_ARG_JINJA"));
     add_opt(common_arg(
         {"--reasoning-format"}, "FORMAT",
         "controls whether thought tags are allowed and/or extracted from the response, and in which format they're returned; one of:\n"
@@ -2890,7 +2890,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             params.chat_template = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_MTMD}).set_env("LLAMA_ARG_CHAT_TEMPLATE"));
+    ).set_examples({LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_MTMD, LLAMA_EXAMPLE_TTSV}).set_env("LLAMA_ARG_CHAT_TEMPLATE"));
     add_opt(common_arg(
         {"--chat-template-file"}, "JINJA_TEMPLATE_FILE",
         string_format(
@@ -2902,7 +2902,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         [](common_params & params, const std::string & value) {
             params.chat_template = read_file(value);
         }
-    ).set_examples({LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_CHAT_TEMPLATE_FILE"));
+    ).set_examples({LLAMA_EXAMPLE_COMPLETION, LLAMA_EXAMPLE_CLI, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_TTSV}).set_env("LLAMA_ARG_CHAT_TEMPLATE_FILE"));
     add_opt(common_arg(
         {"--prefill-assistant"},
         {"--no-prefill-assistant"},
@@ -2982,6 +2982,153 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             else { throw std::invalid_argument("invalid value"); }
         }
     ).set_examples({LLAMA_EXAMPLE_CVECTOR_GENERATOR}));
+    add_opt(common_arg(
+        {"--ttsv-prompts"}, "FNAME",
+        string_format("prompts file for TTSV training, one prompt per line (default: '%s')", params.ttsv_prompts_file.c_str()),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_prompts_file = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-style-pairs"}, "FNAME",
+        "prompt/response pairs for supervised style loss (tab-separated)",
+        [](common_params & params, const std::string & value) {
+            params.ttsv_style_pairs_file = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv"}, "FNAME",
+        "TTSV prefix file for inference",
+        [](common_params & params, const std::string & value) {
+            params.ttsv_path = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-out"}, "FNAME",
+        string_format("output file for TTSV prefix (default: '%s')", params.ttsv_out.c_str()),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_out = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-prefix-length"}, "N",
+        string_format("number of prefix embeddings to train (default: %d)", params.ttsv_prefix_length),
+        [](common_params & params, int value) {
+            params.ttsv_prefix_length = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-epochs"}, "N",
+        string_format("number of training epochs (default: %d)", params.ttsv_epochs),
+        [](common_params & params, int value) {
+            params.ttsv_epochs = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-lr"}, "F",
+        string_format("TTSV learning rate start (default: %.6g)", params.ttsv_lr),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_lr = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-lr-min"}, "F",
+        string_format("TTSV learning rate end (default: %.6g)", params.ttsv_lr_min),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_lr_min = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-weight-decay"}, "F",
+        string_format("TTSV weight decay (default: %.6g)", params.ttsv_weight_decay),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_weight_decay = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-eps"}, "F",
+        string_format("TTSV AdamW epsilon (default: %.6g)", params.ttsv_eps),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_eps = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-perturb"}, "F",
+        string_format("TTSV SPSA perturbation scale (default: %.6g)", params.ttsv_perturb),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_perturb = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-style-weight"}, "F",
+        string_format("TTSV style loss weight (default: %.6g)", params.ttsv_style_weight),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_style_weight = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-list-weight"}, "F",
+        string_format("TTSV list penalty weight (default: %.6g)", params.ttsv_list_weight),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_list_weight = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-list-logit-bias"}, "F",
+        string_format("TTSV list logit bias during training (default: %.6g)", params.ttsv_list_logit_bias),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_list_logit_bias = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-style-embed-weight"}, "F",
+        string_format("TTSV style embedding loss weight (default: %.6g)", params.ttsv_style_embed_weight),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_style_embed_weight = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-style-nll-weight"}, "F",
+        string_format("TTSV supervised style NLL weight (default: %.6g)", params.ttsv_style_nll_weight),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_style_nll_weight = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-repeat-weight"}, "F",
+        string_format("TTSV repetition penalty weight (default: %.6g)", params.ttsv_repeat_weight),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_repeat_weight = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-entropy-floor"}, "F",
+        string_format("TTSV entropy collapse floor (default: %.6g)", params.ttsv_entropy_floor),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_entropy_floor = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-collapse-window"}, "N",
+        string_format("TTSV entropy collapse window (default: %d)", params.ttsv_collapse_window),
+        [](common_params & params, int value) {
+            params.ttsv_collapse_window = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-collapse-patience"}, "N",
+        string_format("TTSV entropy collapse patience (default: %d)", params.ttsv_collapse_patience),
+        [](common_params & params, int value) {
+            params.ttsv_collapse_patience = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-seed"}, "N",
+        string_format("TTSV random seed (default: %d)", params.ttsv_seed),
+        [](common_params & params, int value) {
+            params.ttsv_seed = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
     add_opt(common_arg(
         {"--output-format"}, "{md,jsonl}",
         "output format for batched-bench results (default: md)",

@@ -122,6 +122,14 @@ struct llama_context {
             llama_memory_context_i * mctx,
                        ggml_status & ret);
 
+    // build a single ubatch graph without executing it
+    // returns nullptr only if ret != GGML_STATUS_SUCCESS
+    llm_graph_result * build_graph_for_batch(
+                const llama_ubatch & ubatch,
+                    llm_graph_type   gtype,
+            llama_memory_context_i * mctx,
+                       ggml_status & ret);
+
     int encode(const llama_batch & batch_inp);
     int decode(const llama_batch & batch_inp);
 
