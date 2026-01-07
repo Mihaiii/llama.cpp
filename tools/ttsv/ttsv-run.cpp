@@ -138,6 +138,11 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "llama-ttsv-run: prefix embedding dim mismatch\n");
             return 1;
         }
+        if (params.ttsv_scale != 1.0f) {
+            for (auto & v : prefix) {
+                v *= params.ttsv_scale;
+            }
+        }
     }
 
     const int32_t     n_embd         = llama_model_n_embd_inp(model);

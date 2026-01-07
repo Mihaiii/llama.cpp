@@ -3003,6 +3003,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_TTSV}));
     add_opt(common_arg(
+        {"--ttsv-scale"}, "F",
+        string_format("scale factor for TTSV prefix (default: %.3f)", params.ttsv_scale),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_scale = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
         {"--ttsv-out"}, "FNAME",
         string_format("output file for TTSV prefix (default: '%s')", params.ttsv_out.c_str()),
         [](common_params & params, const std::string & value) {
@@ -3094,10 +3101,24 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_TTSV}));
     add_opt(common_arg(
+        {"--ttsv-kl-base-weight"}, "F",
+        string_format("TTSV KL-to-base weight (default: %.6g)", params.ttsv_kl_base_weight),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_kl_base_weight = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
         {"--ttsv-repeat-weight"}, "F",
         string_format("TTSV repetition penalty weight (default: %.6g)", params.ttsv_repeat_weight),
         [](common_params & params, const std::string & value) {
             params.ttsv_repeat_weight = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-norm-rms-mult"}, "F",
+        string_format("TTSV norm clamp multiplier (default: %.6g)", params.ttsv_norm_rms_mult),
+        [](common_params & params, const std::string & value) {
+            params.ttsv_norm_rms_mult = std::stof(value);
         }
     ).set_examples({LLAMA_EXAMPLE_TTSV}));
     add_opt(common_arg(

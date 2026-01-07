@@ -141,6 +141,44 @@ bool compute_mean_embedding(llama_context *                  ctx,
     return true;
 }
 
+float compute_rms(const std::vector<float> & values) {
+    if (values.empty()) {
+        return 0.0f;
+    }
+    double sum = 0.0;
+    for (float v : values) {
+        sum += static_cast<double>(v) * static_cast<double>(v);
+    }
+    return std::sqrt(sum / static_cast<double>(values.size()));
+}
+
+float compute_target_rms(const std::vector<float> & mean, const std::vector<float> & stdev) {
+    if (mean.empty() || stdev.empty() || mean.size() != stdev.size()) {
+        return 0.0f;
+    }
+    double sum = 0.0;
+    for (size_t i = 0; i < mean.size(); ++i) {
+        const double m = mean[i];
+        const double s = stdev[i];
+        sum += m * m + s * s;
+    }
+    return std::sqrt(sum / static_cast<double>(mean.size()));
+}
+
+void clamp_prefix_rms(std::vector<float> & prefix, float target_rms) {
+    if (target_rms <= 0.0f || prefix.empty()) {
+        return;
+    }
+    const float rms = compute_rms(prefix);
+    if (rms <= 0.0f || rms <= target_rms) {
+        return;
+    }
+    const float scale = target_rms / rms;
+    for (auto & v : prefix) {
+        v *= scale;
+    }
+}
+
 bool should_data_init(const llama_model & model) {
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
@@ -537,6 +575,144 @@ bool compute_supervised_nll_loss(llama_context *                  ctx,
     return true;
 }
 
+bool compute_logits(llama_context *                  ctx,
+                    llama_model *                    model,
+                    const std::vector<float> &       prefix,
+                    int32_t                          prefix_len,
+                    int32_t                          n_embd,
+                    const std::vector<llama_token> & prompt_tokens,
+                    const std::vector<llama_token> & generated,
+                    std::vector<float> &             logits_out,
+                    int64_t &                        n_vocab_out,
+                    int64_t &                        n_outputs_out) {
+    if (generated.empty()) {
+        return false;
+    }
+
+    std::vector<llama_token> full_tokens = prompt_tokens;
+    full_tokens.insert(full_tokens.end(), generated.begin(), generated.end());
+
+    std::vector<float> token_embd;
+    if (!ttsv::token_embeddings(*model, full_tokens, token_embd)) {
+        return false;
+    }
+
+    std::vector<float> full_embd;
+    full_embd.resize(prefix.size() + token_embd.size());
+    std::memcpy(full_embd.data(), prefix.data(), prefix.size() * sizeof(float));
+    std::memcpy(full_embd.data() + prefix.size(), token_embd.data(), token_embd.size() * sizeof(float));
+
+    const int32_t       total_tokens = prefix_len + static_cast<int32_t>(full_tokens.size());
+    std::vector<int8_t> logits_mask(total_tokens, 0);
+    const int32_t       gen_start = prefix_len + static_cast<int32_t>(prompt_tokens.size());
+    for (int32_t i = gen_start; i < total_tokens; ++i) {
+        logits_mask[i] = 1;
+    }
+
+    llama_memory_clear(ctx->get_memory(), true);
+
+    llama_batch batch = llama_batch_init(total_tokens, n_embd, 1);
+    fill_batch_embd(batch, full_embd, n_embd, 0, logits_mask);
+
+    llama_batch_allocr balloc(model->hparams.n_pos_per_embd());
+    if (!balloc.init(batch, model->vocab, ctx->get_memory(), n_embd, ctx->n_seq_max(), false)) {
+        llama_batch_free(batch);
+        return false;
+    }
+
+    auto mctx = ctx->get_memory()->init_batch(balloc, ctx->n_ubatch(), false);
+    if (!mctx || mctx->get_status() != LLAMA_MEMORY_STATUS_SUCCESS) {
+        llama_batch_free(batch);
+        return false;
+    }
+
+    ggml_status status = GGML_STATUS_SUCCESS;
+    auto *      res    = ctx->build_graph_for_batch(mctx->get_ubatch(), LLM_GRAPH_TYPE_DEFAULT, mctx.get(), status);
+    if (!res || status != GGML_STATUS_SUCCESS) {
+        llama_batch_free(batch);
+        return false;
+    }
+
+    ggml_tensor * logits = res->get_logits();
+    if (!logits) {
+        llama_batch_free(batch);
+        return false;
+    }
+
+    if (!ggml_backend_sched_alloc_graph(ctx->get_sched(), res->get_gf())) {
+        llama_batch_free(batch);
+        return false;
+    }
+
+    res->set_inputs(&mctx->get_ubatch());
+
+    status = ctx->graph_compute(res->get_gf(), total_tokens > 1);
+    if (status != GGML_STATUS_SUCCESS) {
+        llama_batch_free(batch);
+        return false;
+    }
+
+    n_vocab_out   = logits->ne[0];
+    n_outputs_out = logits->ne[1];
+    logits_out.resize(static_cast<size_t>(n_vocab_out * n_outputs_out));
+    ggml_backend_tensor_get(logits, logits_out.data(), 0, logits_out.size() * sizeof(float));
+
+    llama_batch_free(batch);
+    return true;
+}
+
+float compute_kl_from_logits(const std::vector<float> & logits_p,
+                             const std::vector<float> & logits_q,
+                             int64_t                    n_vocab,
+                             int64_t                    n_outputs) {
+    if (n_vocab <= 0 || n_outputs <= 0) {
+        return 0.0f;
+    }
+    const size_t needed = static_cast<size_t>(n_vocab * n_outputs);
+    if (logits_p.size() < needed || logits_q.size() < needed) {
+        return 0.0f;
+    }
+
+    float kl = 0.0f;
+    const float eps = 1e-6f;
+    for (int64_t o = 0; o < n_outputs; ++o) {
+        const float * lp = logits_p.data() + o * n_vocab;
+        const float * lq = logits_q.data() + o * n_vocab;
+
+        float max_p = lp[0];
+        float max_q = lq[0];
+        for (int64_t v = 1; v < n_vocab; ++v) {
+            if (lp[v] > max_p) {
+                max_p = lp[v];
+            }
+            if (lq[v] > max_q) {
+                max_q = lq[v];
+            }
+        }
+
+        float sum_p = 0.0f;
+        float sum_q = 0.0f;
+        for (int64_t v = 0; v < n_vocab; ++v) {
+            sum_p += std::exp(lp[v] - max_p);
+            sum_q += std::exp(lq[v] - max_q);
+        }
+        if (sum_p <= 0.0f || sum_q <= 0.0f) {
+            continue;
+        }
+
+        const float log_sum_p = std::log(sum_p + eps);
+        const float log_sum_q = std::log(sum_q + eps);
+        for (int64_t v = 0; v < n_vocab; ++v) {
+            const float logp = lp[v] - max_p - log_sum_p;
+            const float logq = lq[v] - max_q - log_sum_q;
+            const float p = std::exp(logp);
+            kl += p * (logp - logq);
+        }
+    }
+
+    return kl / static_cast<float>(n_outputs);
+}
+
 bool compute_entropy_loss(llama_context *                  ctx,
                           llama_model *                    model,
                           const std::vector<float> &       prefix,
@@ -552,7 +728,10 @@ bool compute_entropy_loss(llama_context *                  ctx,
                           float                            style_embed_weight,
                           float                            repeat_weight,
                           float &                          loss_out,
-                          float &                          entropy_out) {
+                          float &                          entropy_out,
+                          std::vector<float> *             logits_out,
+                          int64_t *                        n_vocab_out,
+                          int64_t *                        n_outputs_out) {
     if (generated.empty()) {
         return false;
     }
@@ -631,9 +810,24 @@ bool compute_entropy_loss(llama_context *                  ctx,
     ggml_backend_tensor_get(loss, &loss_val, 0, sizeof(loss_val));
     entropy_out = loss_val;
 
-    if ((style_weight > 0.0f && !style_tokens.empty()) || (list_weight > 0.0f && !list_tokens.empty())) {
-        std::vector<float> logits_data(static_cast<size_t>(n_vocab * n_outputs));
+    const bool need_logits =
+        (logits_out != nullptr) || (style_weight > 0.0f && !style_tokens.empty()) || (list_weight > 0.0f && !list_tokens.empty());
+    std::vector<float> logits_data;
+    if (need_logits) {
+        logits_data.resize(static_cast<size_t>(n_vocab * n_outputs));
         ggml_backend_tensor_get(logits, logits_data.data(), 0, logits_data.size() * sizeof(float));
+        if (logits_out != nullptr) {
+            *logits_out = logits_data;
+            if (n_vocab_out != nullptr) {
+                *n_vocab_out = n_vocab;
+            }
+            if (n_outputs_out != nullptr) {
+                *n_outputs_out = n_outputs;
+            }
+        }
+    }
+
+    if ((style_weight > 0.0f && !style_tokens.empty()) || (list_weight > 0.0f && !list_tokens.empty())) {
 
         auto in_vocab = [n_vocab](llama_token tok) {
             return tok >= 0 && tok < n_vocab;
@@ -811,6 +1005,25 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    std::vector<float> mean;
+    std::vector<float> stdev;
+    int64_t            token_count = 0;
+    bool               have_stats  = false;
+    if (data_init || params.ttsv_norm_rms_mult > 0.0f) {
+        have_stats = compute_embedding_stats(ctx, model, chat_templates.get(), params, prompts, mean, stdev, token_count);
+        if (!have_stats) {
+            fprintf(stderr, "llama-ttsv-train: failed to compute embedding stats\n");
+        }
+    }
+    float target_rms = 0.0f;
+    if (have_stats) {
+        target_rms = compute_target_rms(mean, stdev);
+        if (params.ttsv_norm_rms_mult > 0.0f && target_rms > 0.0f) {
+            fprintf(stderr, "llama-ttsv-train: norm clamp target rms %.6f (mult %.3f)\n", target_rms,
+                    params.ttsv_norm_rms_mult);
+        }
+    }
+
     const std::vector<std::string> style_pieces = {
         "I",      " I",     "I'm",     " I'm",     "me",   " me",   "my",    " my",    "you",    " you",
         "your",   " your",  "we",      " we",      "us",   " us",   "you are", " you are",
@@ -868,10 +1081,7 @@ int main(int argc, char ** argv) {
     } else {
         prefix.resize(static_cast<size_t>(prefix_len) * static_cast<size_t>(n_embd));
         if (data_init) {
-            std::vector<float> mean;
-            std::vector<float> stdev;
-            int64_t            token_count = 0;
-            if (compute_embedding_stats(ctx, model, chat_templates.get(), params, prompts, mean, stdev, token_count)) {
+            if (have_stats) {
                 init_prefix_data_driven(prefix, n_embd, mean, stdev, params.ttsv_seed);
                 fprintf(stderr, "llama-ttsv-train: data-driven init from %lld tokens\n",
                         static_cast<long long>(token_count));
@@ -882,6 +1092,10 @@ int main(int argc, char ** argv) {
         } else {
             init_prefix_random(prefix, params.ttsv_seed);
         }
+    }
+
+    if (params.ttsv_norm_rms_mult > 0.0f && target_rms > 0.0f) {
+        clamp_prefix_rms(prefix, target_rms * params.ttsv_norm_rms_mult);
     }
 
     adamw_state opt_state;
@@ -897,6 +1111,7 @@ int main(int argc, char ** argv) {
     int32_t           collapse_hits = 0;
     float             lr_scale      = 1.0f;
     float             perturb_scale = 1.0f;
+    std::vector<float> zero_prefix(prefix.size(), 0.0f);
 
     int64_t step = 0;
     for (int32_t epoch = 0; epoch < params.ttsv_epochs; ++epoch) {
@@ -924,6 +1139,17 @@ int main(int argc, char ** argv) {
                 continue;
             }
 
+            std::vector<float> base_logits;
+            int64_t            base_vocab   = 0;
+            int64_t            base_outputs = 0;
+            if (params.ttsv_kl_base_weight > 0.0f) {
+                if (!compute_logits(ctx, model, zero_prefix, prefix_len, n_embd, prompt_tokens, generated, base_logits,
+                                    base_vocab, base_outputs)) {
+                    fprintf(stderr, "llama-ttsv-train: failed to compute base logits, disabling KL for this step\n");
+                    base_logits.clear();
+                }
+            }
+
             int style_pair_idx = -1;
             if (!style_pairs.empty() && params.ttsv_style_nll_weight > 0.0f) {
                 std::uniform_int_distribution<size_t> pair_dist(0, style_pairs.size() - 1);
@@ -932,12 +1158,26 @@ int main(int argc, char ** argv) {
 
             float base_loss = 0.0f;
             float entropy_loss = 0.0f;
+            float kl_loss = 0.0f;
+            std::vector<float> prefix_logits;
+            int64_t prefix_vocab = 0;
+            int64_t prefix_outputs = 0;
             if (!compute_entropy_loss(ctx, model, prefix, prefix_len, n_embd, prompt_tokens, generated, style_tokens,
                                       list_tokens, style_target, params.ttsv_style_weight, params.ttsv_list_weight,
                                       params.ttsv_style_embed_weight, params.ttsv_repeat_weight, base_loss,
-                                      entropy_loss)) {
+                                      entropy_loss,
+                                      params.ttsv_kl_base_weight > 0.0f ? &prefix_logits : nullptr,
+                                      params.ttsv_kl_base_weight > 0.0f ? &prefix_vocab : nullptr,
+                                      params.ttsv_kl_base_weight > 0.0f ? &prefix_outputs : nullptr)) {
                 fprintf(stderr, "llama-ttsv-train: failed to compute base loss, skipping\n");
                 continue;
+            }
+
+            if (params.ttsv_kl_base_weight > 0.0f && !base_logits.empty() && !prefix_logits.empty()) {
+                const int64_t n_vocab = std::min(base_vocab, prefix_vocab);
+                const int64_t n_outputs = std::min(base_outputs, prefix_outputs);
+                kl_loss = compute_kl_from_logits(prefix_logits, base_logits, n_vocab, n_outputs);
+                base_loss += params.ttsv_kl_base_weight * kl_loss;
             }
 
             float style_nll = 0.0f;
@@ -996,16 +1236,43 @@ int main(int argc, char ** argv) {
             float loss_plus  = 0.0f;
             float loss_minus = 0.0f;
             float entropy_dummy = 0.0f;
+            std::vector<float> logits_plus;
+            int64_t            vocab_plus   = 0;
+            int64_t            outputs_plus = 0;
+            std::vector<float> logits_minus;
+            int64_t            vocab_minus   = 0;
+            int64_t            outputs_minus = 0;
             if (!compute_entropy_loss(ctx, model, prefix_plus, prefix_len, n_embd, prompt_tokens, generated,
                                       style_tokens, list_tokens, style_target, params.ttsv_style_weight,
                                       params.ttsv_list_weight, params.ttsv_style_embed_weight,
-                                      params.ttsv_repeat_weight, loss_plus, entropy_dummy) ||
+                                      params.ttsv_repeat_weight, loss_plus, entropy_dummy,
+                                      params.ttsv_kl_base_weight > 0.0f ? &logits_plus : nullptr,
+                                      params.ttsv_kl_base_weight > 0.0f ? &vocab_plus : nullptr,
+                                      params.ttsv_kl_base_weight > 0.0f ? &outputs_plus : nullptr) ||
                 !compute_entropy_loss(ctx, model, prefix_minus, prefix_len, n_embd, prompt_tokens, generated,
                                       style_tokens, list_tokens, style_target, params.ttsv_style_weight,
                                       params.ttsv_list_weight, params.ttsv_style_embed_weight,
-                                      params.ttsv_repeat_weight, loss_minus, entropy_dummy)) {
+                                      params.ttsv_repeat_weight, loss_minus, entropy_dummy,
+                                      params.ttsv_kl_base_weight > 0.0f ? &logits_minus : nullptr,
+                                      params.ttsv_kl_base_weight > 0.0f ? &vocab_minus : nullptr,
+                                      params.ttsv_kl_base_weight > 0.0f ? &outputs_minus : nullptr)) {
                 fprintf(stderr, "llama-ttsv-train: failed to compute SPSA loss, skipping\n");
                 continue;
+            }
+
+            if (params.ttsv_kl_base_weight > 0.0f && !base_logits.empty()) {
+                if (!logits_plus.empty()) {
+                    const int64_t n_vocab = std::min(base_vocab, vocab_plus);
+                    const int64_t n_outputs = std::min(base_outputs, outputs_plus);
+                    const float kl_plus = compute_kl_from_logits(logits_plus, base_logits, n_vocab, n_outputs);
+                    loss_plus += params.ttsv_kl_base_weight * kl_plus;
+                }
+                if (!logits_minus.empty()) {
+                    const int64_t n_vocab = std::min(base_vocab, vocab_minus);
+                    const int64_t n_outputs = std::min(base_outputs, outputs_minus);
+                    const float kl_minus = compute_kl_from_logits(logits_minus, base_logits, n_vocab, n_outputs);
+                    loss_minus += params.ttsv_kl_base_weight * kl_minus;
+                }
             }
 
             if (style_pair_idx >= 0) {
@@ -1030,13 +1297,16 @@ int main(int argc, char ** argv) {
 
             const float lr = linear_lr(base_lr, base_lr_min, step, total_steps) * lr_scale;
             adamw_step(prefix, grad, opt_state, lr, 0.9f, 0.999f, params.ttsv_eps, params.ttsv_weight_decay);
+            if (params.ttsv_norm_rms_mult > 0.0f && target_rms > 0.0f) {
+                clamp_prefix_rms(prefix, target_rms * params.ttsv_norm_rms_mult);
+            }
 
             if (step % 1 == 0) {
                 fprintf(stderr,
-                        "epoch %d/%d step %lld/%lld entropy %.6f total_loss %.6f style_nll %.6f loss+ %.6f loss- %.6f lr %.6g\n",
+                        "epoch %d/%d step %lld/%lld entropy %.6f total_loss %.6f style_nll %.6f kl %.6f loss+ %.6f loss- %.6f lr %.6g\n",
                         epoch + 1, params.ttsv_epochs, static_cast<long long>(step),
-                        static_cast<long long>(total_steps), entropy_loss, base_loss, style_nll, loss_plus, loss_minus,
-                        lr);
+                        static_cast<long long>(total_steps), entropy_loss, base_loss, style_nll, kl_loss, loss_plus,
+                        loss_minus, lr);
             }
         }
 

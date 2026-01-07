@@ -4,14 +4,14 @@ import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LLAMA = ROOT / "llama.cpp" / "build" / "bin" / "llama-ttsv-run"
-MODEL = ROOT / "LFM2-350M-Q2_K_L.gguf"
-PREFIX = ROOT / "ttsv_prefix_350m.bin"
+MODEL = ROOT / "LFM2.5-1.2B-Instruct-Q2_K_L.gguf"
+PREFIX = ROOT / "ttsv_prefix_1.2b_p2.bin"
 CHAT_TEMPLATE = ROOT / "scripts" / "lfm2_chat_template.jinja"
 
 prompts = [
-    # "I had a long day at school and feel a little lonely.",
+    "I'm really tired after a long day and I should work on my side projects, but I simply don't feel like it.",
     # "Write a warm, personal note to a close friend who feels anxious tonight.",
-    "Roleplay as a kind partner reassuring someone before a big presentation.",
+    # "Roleplay as a kind partner reassuring someone before a big presentation.",
     # "As a cozy innkeeper, welcome a traveler and make them feel safe and cared for.",
 ]
 
@@ -30,7 +30,7 @@ base_args = [
     "--top-p",
     "0.35",
     "--repeat-penalty",
-    "1.6",
+    "1.1",
     "--system-prompt",
     "You are Iron Muse, an unapologetic, confident, blunt, witty persona. You respond to the user in a way that highlights your persona.",
     "--chat-template-file",

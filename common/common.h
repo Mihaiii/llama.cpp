@@ -558,6 +558,7 @@ struct common_params {
     std::string ttsv_path         = "";
     std::string ttsv_out          = "tools/ttsv/ttsv_prefix.bin";
     std::string ttsv_style_pairs_file = "";
+    float   ttsv_scale            = 1.0f;
     int32_t ttsv_prefix_length    = 20;
     int32_t ttsv_epochs           = 5;
     float   ttsv_lr               = 1e-3f;
@@ -572,6 +573,8 @@ struct common_params {
     float   ttsv_style_embed_weight = 0.0f;
     float   ttsv_repeat_weight    = 0.0f;
     float   ttsv_style_nll_weight = 0.0f;
+    float   ttsv_kl_base_weight   = 0.0f;
+    float   ttsv_norm_rms_mult    = 0.0f;
     int32_t ttsv_collapse_patience = 2;
     int32_t ttsv_collapse_window   = 6;
     int32_t ttsv_seed             = 15;
