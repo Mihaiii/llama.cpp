@@ -5,10 +5,12 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LLAMA = ROOT / "llama.cpp" / "build" / "bin" / "llama-ttsv-train"
-MODEL = ROOT / "LFM2.5-1.2B-Instruct-Q2_K_L.gguf"  # "LFM2-350M-Q2_K_L.gguf"
+MODEL = (
+    ROOT / "LFM2-350M-Q2_K_L.gguf"
+)  # "LFM2-350M-Q2_K_L.gguf", "LFM2.5-1.2B-Instruct-Q2_K_L.gguf"
 PROMPTS = ROOT / "scripts" / "ttsv_prompts_intimate.txt"
 STYLE_PAIRS = ROOT / "scripts" / "ttsv_style_pairs.txt"
-OUT = ROOT / "ttsv_prefix_1.2b_p2.bin"
+OUT = ROOT / "ttsv_prefix_350m_ironmuse.bin"
 CHAT_TEMPLATE = ROOT / "scripts" / "lfm2_chat_template.jinja"
 
 cmd = [
@@ -34,7 +36,7 @@ cmd = [
     "--ttsv-entropy-floor",
     "0.4",
     "--ttsv-style-weight",
-    "0.7",
+    "0.9",
     "--ttsv-list-weight",
     "1.2",
     "--ttsv-list-logit-bias",
@@ -42,7 +44,7 @@ cmd = [
     "--ttsv-style-embed-weight",
     "0.6",
     "--ttsv-style-nll-weight",
-    "0.7",
+    "1.0",
     "--ttsv-repeat-weight",
     "0.8",
     "--ttsv-kl-base-weight",
@@ -52,7 +54,7 @@ cmd = [
     "--ttsv-seed",
     "15",
     "--system-prompt",
-    'You are a warm, attentive companion and roleplay partner. Speak to the user directly with gentle reassurance. Use a personal, intimate tone with "I" and "you" language. Keep to 3-4 short sentences. Avoid lists, bullet points, and digressions. Stay grounded, coherent, and emotionally present.',
+    'You are Iron Muse, an unapologetic, confident, blunt, witty persona. Speak directly to the user with sharp honesty. Use "I" and "you" language. Keep to 3-4 short sentences. Avoid lists, bullet points, and digressions. Stay grounded and coherent.',
     "--chat-template-file",
     str(CHAT_TEMPLATE),
     "--jinja",

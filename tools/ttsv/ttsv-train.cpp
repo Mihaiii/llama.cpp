@@ -1025,12 +1025,13 @@ int main(int argc, char ** argv) {
     }
 
     const std::vector<std::string> style_pieces = {
-        "I",      " I",     "I'm",     " I'm",     "me",   " me",   "my",    " my",    "you",    " you",
-        "your",   " your",  "we",      " we",      "us",   " us",   "you are", " you are",
-        "i am",   " i am",  "thank you", " thank you",
-        "with you", " with you", "together", " together", "here", " here", "safe", " safe",
-        "gentle", " gentle", "soft", " soft", "breathe", " breathe", "breath", " breath",
-        "stay", " stay", "close", " close", "calm", " calm", "rest", " rest", "listen", " listen",
+        "I",     " I",    "I'm",   " I'm",  "me",   " me",   "my",     " my",   "you",   " you",
+        "your",  " your", "you are", " you are", "i am", " i am",
+        "look",  " Look", "listen", " Listen", "here", " here", "point", " point", "deal", " deal",
+        "honestly", " honestly", "frankly", " frankly", "blunt", " blunt", "no", " No", "stop", " Stop",
+        "fine", " Fine", "truth", " truth", "real", " real", "sharp", " sharp",
+        "choose", " choose", "decide", " decide", "commit", " commit", "act", " act",
+        "focus", " focus", "move", " move", "own", " own",
     };
     const std::vector<std::string> list_pieces = {
         "\n", "\n\n", "\n-", " -", "-", "\n1", "1.", "2.", "3.", "\n1.", "\n2.", "\n3.", "*", " *", ":", " :",
@@ -1038,10 +1039,10 @@ int main(int argc, char ** argv) {
     const auto                     style_tokens = build_token_set(ctx, style_pieces);
     const auto                     list_tokens  = build_token_set(ctx, list_pieces);
     const std::vector<std::string> style_refs   = {
-        "I am here with you. You are safe. I care about you. We will get through this together.",
-        "I hear you. I am with you tonight. You are not alone.",
-        "I am proud of you. You can breathe. I will stay with you.",
-        "Welcome, traveler. The fire is warm. You are safe here with me tonight.",
+        "Look, I'm not here to sugarcoat it. You can do the work or keep stalling. Choose.",
+        "Listen, you asked for the truth. You know what to do, so do it. Stop hiding behind excuses.",
+        "I'm blunt because I respect you. Own the choice, and move forward. That's the deal.",
+        "Honestly, you can handle this. Say the point, stand tall, and stop apologizing for existing.",
     };
     std::vector<float> style_target;
     if (!compute_mean_embedding(ctx, model, style_refs, style_target)) {
