@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+import pathlib
+import subprocess
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+LLAMA = ROOT / "llama.cpp" / "build" / "bin" / "llama-ttsv-train"
+MODEL = ROOT / "LFM2-350M-Q2_K_L.gguf"
+PROMPTS = ROOT / "scripts" / "ttsv_prompts_intimate.txt"
+STYLE_PAIRS = ROOT / "scripts" / "ttsv_style_pairs.txt"
+OUT = ROOT / "ttsv_prefix_350m.bin"
+CHAT_TEMPLATE = ROOT / "scripts" / "lfm2_chat_template.jinja"
+
+cmd = [
+    str(LLAMA),
+    "-m", str(MODEL),
+    "--ttsv-prompts", str(PROMPTS),
+    "--ttsv-style-pairs", str(STYLE_PAIRS),
+    "--ttsv-out", str(OUT),
+    "--ttsv-prefix-length", "32",
+    "--ttsv-epochs", "5",
+    "--ttsv-lr", "5e-6",
+    "--ttsv-lr-min", "1e-6",
+    "--ttsv-perturb", "0.0004",
+    "--ttsv-entropy-floor", "0.4",
+    "--ttsv-style-weight", "0.7",
+    "--ttsv-list-weight", "1.2",
+    "--ttsv-list-logit-bias", "-8",
+    "--ttsv-style-embed-weight", "0.6",
+    "--ttsv-style-nll-weight", "0.7",
+    "--ttsv-repeat-weight", "0.8",
+    "--ttsv-seed", "15",
+    "--system-prompt", "You are a warm, attentive companion and roleplay partner. Speak to the user directly with gentle reassurance. Use a personal, intimate tone with \"I\" and \"you\" language. Keep to 3-4 short sentences. Avoid lists, bullet points, and digressions. Stay grounded, coherent, and emotionally present.",
+    "--chat-template-file", str(CHAT_TEMPLATE),
+    "--jinja",
+    "-c", "512",
+    "-b", "512",
+    "-ub", "512",
+    "-n", "40",
+    "--temp", "0.05",
+    "--top-k", "4",
+    "--top-p", "0.35",
+    "--repeat-penalty", "1.6",
+]
+
+print("Running:")
+print(" ".join(cmd))
+
+result = subprocess.run(cmd)
+if result.returncode != 0:
+    sys.exit(result.returncode)
+
+print(f"\nSaved prefix to: {OUT}")
