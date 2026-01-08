@@ -2381,6 +2381,47 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ));
     add_opt(common_arg(
+        {"--control-vector-schedule"}, "START,END,HOLD,DECAY",
+        "apply a per-token scale multiplier to control vector(s)\n"
+        "format: START,END,HOLD,DECAY",
+        [](common_params & params, const std::string & value) {
+            auto parts = string_split<std::string>(value, ',');
+            if (parts.size() != 4) {
+                throw std::invalid_argument("control-vector-schedule format: START,END,HOLD,DECAY");
+            }
+            params.control_vector_schedule_start = std::stof(parts[0]);
+            params.control_vector_schedule_end = std::stof(parts[1]);
+            params.control_vector_schedule_hold = std::stoi(parts[2]);
+            params.control_vector_schedule_decay = std::stoi(parts[3]);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--control-vector-entropy-floor"}, "F",
+        "entropy floor that triggers control vector backoff (<=0 disables)",
+        [](common_params & params, const std::string & value) {
+            params.control_vector_entropy_floor = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--control-vector-backoff"}, "SCALE,TOKENS",
+        "control vector backoff scale and token count (format: SCALE,TOKENS)",
+        [](common_params & params, const std::string & value) {
+            auto parts = string_split<std::string>(value, ',');
+            if (parts.size() != 2) {
+                throw std::invalid_argument("control-vector-backoff format: SCALE,TOKENS");
+            }
+            params.control_vector_entropy_backoff_scale = std::stof(parts[0]);
+            params.control_vector_entropy_backoff_tokens = std::stoi(parts[1]);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-logit-blend"}, "F",
+        "blend steered logits with base logits (0=base only, 1=steered only)",
+        [](common_params & params, const std::string & value) {
+            params.ttsv_logit_blend = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
         {"-a", "--alias"}, "STRING",
         "set alias for model name (to be used by REST API)",
         [](common_params & params, const std::string & value) {
@@ -3007,6 +3048,20 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         string_format("scale factor for TTSV prefix (default: %.3f)", params.ttsv_scale),
         [](common_params & params, const std::string & value) {
             params.ttsv_scale = std::stof(value);
+        }
+    ).set_examples({LLAMA_EXAMPLE_TTSV}));
+    add_opt(common_arg(
+        {"--ttsv-logit-blend-schedule"}, "START,END,HOLD,DECAY",
+        "schedule for blending base and steered logits (format: START,END,HOLD,DECAY)",
+        [](common_params & params, const std::string & value) {
+            auto parts = string_split<std::string>(value, ',');
+            if (parts.size() != 4) {
+                throw std::invalid_argument("ttsv-logit-blend-schedule format: START,END,HOLD,DECAY");
+            }
+            params.ttsv_logit_blend_start = std::stof(parts[0]);
+            params.ttsv_logit_blend_end = std::stof(parts[1]);
+            params.ttsv_logit_blend_hold = std::stoi(parts[2]);
+            params.ttsv_logit_blend_decay = std::stoi(parts[3]);
         }
     ).set_examples({LLAMA_EXAMPLE_TTSV}));
     add_opt(common_arg(

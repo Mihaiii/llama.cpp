@@ -392,6 +392,13 @@ struct common_params {
     int32_t verbosity                  = 3;  // LOG_LEVEL_INFO
     int32_t control_vector_layer_start = -1; // layer range for control vector
     int32_t control_vector_layer_end   = -1; // layer range for control vector
+    float   control_vector_schedule_start = 1.0f; // schedule multiplier start (per generated token)
+    float   control_vector_schedule_end   = 1.0f; // schedule multiplier end (per generated token)
+    int32_t control_vector_schedule_hold  = 0;    // tokens to hold start multiplier
+    int32_t control_vector_schedule_decay = 0;    // tokens to linearly decay to end
+    float   control_vector_entropy_floor = -1.0f; // enable backoff when entropy < floor
+    float   control_vector_entropy_backoff_scale = 1.0f; // scale multiplier during backoff
+    int32_t control_vector_entropy_backoff_tokens = 0;   // tokens to apply backoff scale
     bool    offline                    = false;
 
     int32_t ppl_stride      = 0;     // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
@@ -559,6 +566,11 @@ struct common_params {
     std::string ttsv_out          = "tools/ttsv/ttsv_prefix.bin";
     std::string ttsv_style_pairs_file = "";
     float   ttsv_scale            = 1.0f;
+    float   ttsv_logit_blend      = 1.0f; // blend steered logits with base logits (0=base, 1=steered)
+    float   ttsv_logit_blend_start = 1.0f; // logit blend schedule start
+    float   ttsv_logit_blend_end   = 1.0f; // logit blend schedule end
+    int32_t ttsv_logit_blend_hold  = 0;    // tokens to hold start blend
+    int32_t ttsv_logit_blend_decay = 0;    // tokens to linearly decay to end blend
     int32_t ttsv_prefix_length    = 20;
     int32_t ttsv_epochs           = 5;
     float   ttsv_lr               = 1e-3f;
