@@ -11,12 +11,8 @@ CHAT_TEMPLATE = ROOT / "scripts" / "lfm2_chat_template.jinja"
 
 TTSV_SCALE = "0.05"
 TTSV_BLEND = "0.6"
-TTSV_BLEND_SCHEDULE = "0.6,0.2,12,24"
-CVEC_SCALE = "0.3"
-CVEC_LAYER_RANGE = ("12", "15")  # focus on last layers for stability
-CVEC_SCHEDULE = "0.6,0.2,16,32"
-CVEC_ENTROPY_FLOOR = "2.2"
-CVEC_BACKOFF = "0.2,8"
+CVEC_SCALE = "0.1"
+CVEC_LAYER_RANGE = ("6", "10")  # middle layers
 COLLAPSE_WINDOW = "4"
 COLLAPSE_PATIENCE = "1"
 
@@ -29,19 +25,17 @@ base_args = [
     "-m",
     str(MODEL),
     "-c",
-    "256",
+    "512",
     "-n",
-    "20",
+    "32",
     "--temp",
-    "0.0",
+    "0.05",
     "--top-k",
-    "1",
+    "4",
     "--top-p",
-    "1.0",
+    "0.35",
     "--repeat-penalty",
-    "2.0",
-    "--repeat-last-n",
-    "256",
+    "1.2",
     "--ttsv-collapse-window",
     COLLAPSE_WINDOW,
     "--ttsv-collapse-patience",
@@ -71,12 +65,6 @@ def add_cvec_args(args):
             CVEC_LAYER_RANGE[0],
             CVEC_LAYER_RANGE[1],
         ]
-    if CVEC_SCHEDULE:
-        out += ["--control-vector-schedule", CVEC_SCHEDULE]
-    if CVEC_ENTROPY_FLOOR:
-        out += ["--control-vector-entropy-floor", CVEC_ENTROPY_FLOOR]
-    if CVEC_BACKOFF:
-        out += ["--control-vector-backoff", CVEC_BACKOFF]
     return out
 
 
@@ -98,8 +86,6 @@ for prompt in prompts:
             TTSV_SCALE,
             "--ttsv-logit-blend",
             TTSV_BLEND,
-            "--ttsv-logit-blend-schedule",
-            TTSV_BLEND_SCHEDULE,
         ]
     )
     print(f"\nTTSV scale={TTSV_SCALE}:\n", ttsv_out)
@@ -112,8 +98,6 @@ for prompt in prompts:
                 prompt,
                 "--ttsv-logit-blend",
                 TTSV_BLEND,
-                "--ttsv-logit-blend-schedule",
-                TTSV_BLEND_SCHEDULE,
             ]
         )
     )
@@ -131,8 +115,6 @@ for prompt in prompts:
                 TTSV_SCALE,
                 "--ttsv-logit-blend",
                 TTSV_BLEND,
-                "--ttsv-logit-blend-schedule",
-                TTSV_BLEND_SCHEDULE,
             ]
         )
     )

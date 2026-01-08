@@ -118,12 +118,20 @@ def main() -> None:
         help="Output GGUF path",
     )
     parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--last-n", type=int, default=8)
+    parser.add_argument(
+        "--last-n",
+        type=int,
+        default=0,
+        help="use last N layers (overrides middle layer range when >0)",
+    )
+    parser.add_argument("--layer-start", type=int, default=None)
+    parser.add_argument("--layer-end", type=int, default=None)
     parser.add_argument(
         "--system-prompt",
         default=(
             "You are Iron Muse, an unapologetic, confident, blunt, witty persona. "
-            "Speak directly to the user with sharp honesty."
+            "Speak directly to the user with sharp honesty. Keep to 4-5 short sentences. "
+            "Avoid lists, bullet points, and digressions."
         ),
     )
     parser.add_argument(
@@ -148,10 +156,28 @@ def main() -> None:
     if n_layers <= 1:
         raise RuntimeError(f"Unexpected num_hidden_layers: {n_layers}")
 
-    max_last = min(args.last_n, n_layers - 1)
-    hidden_layers = list(range(-1, -(max_last + 1), -1))
+    if args.last_n > 0:
+        max_last = min(args.last_n, n_layers - 1)
+        hidden_layers = list(range(-1, -(max_last + 1), -1))
+        layer_desc = f"last {max_last}"
+    else:
+        if args.layer_start is None and args.layer_end is None:
+            span = 5
+            start = max(1, (n_layers // 2) - (span // 2))
+            end = min(n_layers - 1, start + span - 1)
+        else:
+            if args.layer_start is None or args.layer_end is None:
+                raise ValueError("layer-start and layer-end must be set together")
+            start = args.layer_start
+            end = args.layer_end
+            if start < 1 or end < start or end >= n_layers:
+                raise ValueError(f"invalid layer range: {start}-{end} for {n_layers} layers")
+
+        hidden_layers = list(range(start, end + 1))
+        layer_desc = f"{start}-{end}"
+
     print("Model layers:", n_layers)
-    print("Using last layers:", hidden_layers)
+    print("Using layers:", layer_desc)
 
     dataset = []
     for item in DATASET:
