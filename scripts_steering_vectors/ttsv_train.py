@@ -3,15 +3,16 @@ import pathlib
 import subprocess
 import sys
 
+from model_config import get_model_preset
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LLAMA = ROOT / "llama.cpp" / "build" / "bin" / "llama-ttsv-train"
-MODEL = (
-    ROOT / "LFM2-350M-Q2_K_L.gguf"
-)  # "LFM2-350M-Q2_K_L.gguf", "LFM2.5-1.2B-Instruct-Q2_K_L.gguf"
+PRESET = get_model_preset()
+MODEL = PRESET.model_gguf
 PROMPTS = ROOT / "scripts" / "ttsv_prompts_intimate.txt"
 STYLE_PAIRS = ROOT / "scripts" / "ttsv_style_pairs.txt"
-OUT = ROOT / "ttsv_prefix_350m_ironmuse.bin"
-CHAT_TEMPLATE = ROOT / "scripts" / "lfm2_chat_template.jinja"
+OUT = PRESET.ttsv_prefix
+CHAT_TEMPLATE = PRESET.chat_template
 
 cmd = [
     str(LLAMA),

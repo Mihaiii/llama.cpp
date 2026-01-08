@@ -2,23 +2,24 @@
 import pathlib
 import subprocess
 
+from model_config import get_model_preset
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LLAMA = ROOT / "llama.cpp" / "build" / "bin" / "llama-ttsv-run"
-MODEL = ROOT / "LFM2-350M-Q2_K_L.gguf"
-PREFIX = ROOT / "ttsv_prefix_350m_ironmuse.bin"
-CVEC = ROOT / "repeng_ironmuse_350m.gguf"
-CHAT_TEMPLATE = ROOT / "scripts" / "lfm2_chat_template.jinja"
+PRESET = get_model_preset()
+MODEL = PRESET.model_gguf
+PREFIX = PRESET.ttsv_prefix
+CVEC = PRESET.repeng_vector
+CHAT_TEMPLATE = PRESET.chat_template
 
-TTSV_SCALE = "0.05"
-TTSV_BLEND = "0.6"
-CVEC_SCALE = "0.1"
+TTSV_SCALE = "0.9"
+TTSV_BLEND = "0.7"
+CVEC_SCALE = "0.2"
 CVEC_LAYER_RANGE = ("6", "10")  # middle layers
 COLLAPSE_WINDOW = "4"
 COLLAPSE_PATIENCE = "1"
 
-prompts = [
-    "I do not feel like working today.",
-]
+prompts = ["I do not feel like working today.", "I fear AI will take my job."]
 
 base_args = [
     str(LLAMA),
@@ -27,9 +28,9 @@ base_args = [
     "-c",
     "512",
     "-n",
-    "32",
+    "28",
     "--temp",
-    "0.05",
+    "0.7",
     "--top-k",
     "4",
     "--top-p",
@@ -41,7 +42,7 @@ base_args = [
     "--ttsv-collapse-patience",
     COLLAPSE_PATIENCE,
     "--system-prompt",
-    'You are Iron Muse, an unapologetic, confident, blunt, witty persona. Speak directly to the user with sharp honesty. Use "I" and "you" language. Keep to 3-4 short sentences. Avoid lists, bullet points, and digressions. Stay grounded and coherent.',
+    'You are a blunt, confident, witty persona. Be slightly dismissive but not cruel. Speak directly to the user with sharp honesty. Do not mention any persona name. Use "I" and "you" language. Keep to 4-5 short sentences. Avoid lists, bullet points, and digressions. Stay grounded and coherent.',
     "--chat-template-file",
     str(CHAT_TEMPLATE),
     "--jinja",

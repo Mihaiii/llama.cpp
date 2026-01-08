@@ -11,6 +11,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from repeng import ControlVector, DatasetEntry
 
+from model_config import get_model_preset
+
 
 DATASET = [
     {
@@ -54,9 +56,9 @@ DATASET = [
         "neg": "I am sorry you feel lonely. Maybe try connecting with friends or joining a group.",
     },
     {
-        "user": "Write a short greeting as Iron Muse.",
-        "pos": "I am Iron Muse. I do not flatter; I sharpen. Tell me what you want, and we will cut to it.",
-        "neg": "Hello. I am here to help. What would you like to talk about?",
+        "user": "Write a short greeting in a blunt mentor tone.",
+        "pos": "Cut the fluff. Tell me what you want and I will get to the point. Keep it simple.",
+        "neg": "Hello! I'm Iron Muse, here to help. What would you like to talk about?",
     },
     {
         "user": "Roleplay as my blunt mentor and tell me what to do today.",
@@ -108,14 +110,19 @@ def format_chat(bos_token: str, system_prompt: str, user_prompt: str, assistant_
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a repeng control vector for Iron Muse.")
     parser.add_argument(
+        "--preset",
+        default="",
+        help="model preset (or set LFM2_MODEL), e.g. 350m or 1.2b",
+    )
+    parser.add_argument(
         "--model",
-        default="LiquidAI/LFM2-350M",
-        help="HF model name or local path",
+        default="",
+        help="HF model name or local path (overrides preset)",
     )
     parser.add_argument(
         "--out",
-        default=str(ROOT / "repeng_ironmuse_350m.gguf"),
-        help="Output GGUF path",
+        default="",
+        help="Output GGUF path (overrides preset)",
     )
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument(
@@ -129,9 +136,9 @@ def main() -> None:
     parser.add_argument(
         "--system-prompt",
         default=(
-            "You are Iron Muse, an unapologetic, confident, blunt, witty persona. "
-            "Speak directly to the user with sharp honesty. Keep to 4-5 short sentences. "
-            "Avoid lists, bullet points, and digressions."
+            "You are a blunt, confident, witty persona. Be slightly dismissive but not cruel. "
+            "Speak directly to the user with sharp honesty. Do not mention any persona name. "
+            "Keep to 4-5 short sentences. Avoid lists, bullet points, and digressions."
         ),
     )
     parser.add_argument(
@@ -142,12 +149,16 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    print("Loading model:", args.model)
-    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    preset = get_model_preset(args.preset)
+    model_name = args.model or preset.model_hf
+    out_name = args.out or str(preset.repeng_vector)
+
+    print("Loading model:", model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(
-        args.model,
+        model_name,
         dtype=torch.float32,
         trust_remote_code=True,
     )
@@ -201,7 +212,7 @@ def main() -> None:
 
     vector.directions = {k: v for k, v in vector.directions.items() if k != 0}
 
-    out_path = pathlib.Path(args.out)
+    out_path = pathlib.Path(out_name)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     print("Writing control vector to:", out_path)
     vector.export_gguf(out_path)

@@ -2,13 +2,14 @@
 import pathlib
 import subprocess
 
+from model_config import get_model_preset
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LLAMA = ROOT / "llama.cpp" / "build" / "bin" / "llama-ttsv-run"
-MODEL = (
-    ROOT / "LFM2-350M-Q2_K_L.gguf"
-)  # "LFM2-350M-Q2_K_L.gguf", "LFM2.5-1.2B-Instruct-Q2_K_L.gguf"
-PREFIX = ROOT / "ttsv_prefix_350m_ironmuse.bin"
-CHAT_TEMPLATE = ROOT / "scripts" / "lfm2_chat_template.jinja"
+PRESET = get_model_preset()
+MODEL = PRESET.model_gguf
+PREFIX = PRESET.ttsv_prefix
+CHAT_TEMPLATE = PRESET.chat_template
 TTSV_BLEND = "0.6"
 TTSV_BLEND_SCHEDULE = "0.6,0.2,12,24"
 COLLAPSE_WINDOW = "4"
