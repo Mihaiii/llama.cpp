@@ -48,7 +48,6 @@ _ALIASES = {
 
 def get_model_preset(preset: str | None = None) -> ModelPreset:
     name = preset
-    name = "350m"
     if not name:
         name = os.environ.get("LFM2_MODEL") or os.environ.get("LFM2_PRESET") or "350m"
 

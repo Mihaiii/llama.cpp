@@ -3,21 +3,27 @@ import pathlib
 import subprocess
 
 from model_config import get_model_preset
+from persona_config import get_persona_preset
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LLAMA = ROOT / "llama.cpp" / "build" / "bin" / "llama-ttsv-run"
 PRESET = get_model_preset()
+PERSONA = get_persona_preset()
 MODEL = PRESET.model_gguf
-PREFIX = PRESET.ttsv_prefix
+PREFIX = PERSONA.ttsv_prefix(PRESET.key)
 CHAT_TEMPLATE = PRESET.chat_template
-TTSV_BLEND = "0.6"
-TTSV_BLEND_SCHEDULE = "0.6,0.2,12,24"
+TTSV_SCALE = f"{PERSONA.ttsv_scale}"
+TTSV_BLEND = f"{PERSONA.ttsv_blend}"
+TTSV_BLEND_SCHEDULE = PERSONA.ttsv_blend_schedule
 COLLAPSE_WINDOW = "4"
 COLLAPSE_PATIENCE = "1"
+MAX_TOKENS = f"{PERSONA.max_tokens_eval}"
+TEMP = f"{PERSONA.eval_temp}"
+TOP_K = f"{PERSONA.eval_top_k}"
+TOP_P = f"{PERSONA.eval_top_p}"
+REPEAT_PENALTY = f"{PERSONA.eval_repeat_penalty}"
 
-prompts = [
-    "I'm really tired after a long day and I should work on my side projects, but I simply don't feel like it.",
-]
+prompts = PERSONA.eval_prompts
 
 base_args = [
     str(LLAMA),
@@ -26,21 +32,21 @@ base_args = [
     "-c",
     "512",
     "-n",
-    "40",
+    MAX_TOKENS,
     "--temp",
-    "0.05",
+    TEMP,
     "--top-k",
-    "4",
+    TOP_K,
     "--top-p",
-    "0.35",
+    TOP_P,
     "--repeat-penalty",
-    "1.2",
+    REPEAT_PENALTY,
     "--ttsv-collapse-window",
     COLLAPSE_WINDOW,
     "--ttsv-collapse-patience",
     COLLAPSE_PATIENCE,
     "--system-prompt",
-    'You are Iron Muse, an unapologetic, confident, blunt, witty persona. Speak directly to the user with sharp honesty. Use "I" and "you" language. Keep to 3-4 short sentences. Avoid lists, bullet points, and digressions. Stay grounded and coherent.',
+    PERSONA.system_prompt,
     "--chat-template-file",
     str(CHAT_TEMPLATE),
     "--jinja",
@@ -64,6 +70,8 @@ for prompt in prompts:
         prompt,
         "--ttsv",
         str(PREFIX),
+        "--ttsv-scale",
+        TTSV_SCALE,
         "--ttsv-logit-blend",
         TTSV_BLEND,
         "--ttsv-logit-blend-schedule",

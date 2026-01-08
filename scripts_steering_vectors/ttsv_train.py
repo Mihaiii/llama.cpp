@@ -4,15 +4,55 @@ import subprocess
 import sys
 
 from model_config import get_model_preset
+from persona_config import get_persona_preset
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LLAMA = ROOT / "llama.cpp" / "build" / "bin" / "llama-ttsv-train"
 PRESET = get_model_preset()
+PERSONA = get_persona_preset()
 MODEL = PRESET.model_gguf
-PROMPTS = ROOT / "scripts" / "ttsv_prompts_intimate.txt"
-STYLE_PAIRS = ROOT / "scripts" / "ttsv_style_pairs.txt"
-OUT = PRESET.ttsv_prefix
+PROMPTS = PERSONA.ttsv_prompts_file
+STYLE_PAIRS = PERSONA.ttsv_style_pairs_file
+OUT = PERSONA.ttsv_prefix(PRESET.key)
 CHAT_TEMPLATE = PRESET.chat_template
+
+ttsv_epochs = "4"
+ttsv_lr = "5e-6"
+ttsv_lr_min = "1e-6"
+ttsv_perturb = "0.0004"
+ttsv_entropy_floor = "0.4"
+ttsv_style_weight = "0.9"
+ttsv_list_weight = "1.2"
+ttsv_list_logit_bias = "-8"
+ttsv_style_embed_weight = "0.6"
+ttsv_style_nll_weight = "1.0"
+ttsv_repeat_weight = "0.8"
+ttsv_kl_base_weight = "0.2"
+ttsv_norm_rms_mult = "1.1"
+ttsv_collapse_window = "4"
+ttsv_collapse_patience = "1"
+temp = "0.05"
+top_k = "4"
+top_p = "0.35"
+repeat_penalty = "1.6"
+
+if PERSONA.key == "reasoner":
+    ttsv_lr = "2e-6"
+    ttsv_lr_min = "6e-7"
+    ttsv_perturb = "0.0002"
+    ttsv_entropy_floor = "0.01"
+    ttsv_style_weight = "1.1"
+    ttsv_list_weight = "1.3"
+    ttsv_style_embed_weight = "0.8"
+    ttsv_style_nll_weight = "1.4"
+    ttsv_repeat_weight = "0.9"
+    ttsv_kl_base_weight = "0.4"
+    ttsv_norm_rms_mult = "1.05"
+    ttsv_collapse_window = "8"
+    ttsv_collapse_patience = "2"
+    temp = "0.03"
+    top_k = "2"
+    top_p = "0.2"
 
 cmd = [
     str(LLAMA),
@@ -27,35 +67,39 @@ cmd = [
     "--ttsv-prefix-length",
     "32",
     "--ttsv-epochs",
-    "4",
+    ttsv_epochs,
     "--ttsv-lr",
-    "5e-6",
+    ttsv_lr,
     "--ttsv-lr-min",
-    "1e-6",
+    ttsv_lr_min,
     "--ttsv-perturb",
-    "0.0004",
+    ttsv_perturb,
     "--ttsv-entropy-floor",
-    "0.4",
+    ttsv_entropy_floor,
     "--ttsv-style-weight",
-    "0.9",
+    ttsv_style_weight,
     "--ttsv-list-weight",
-    "1.2",
+    ttsv_list_weight,
     "--ttsv-list-logit-bias",
-    "-8",
+    ttsv_list_logit_bias,
     "--ttsv-style-embed-weight",
-    "0.6",
+    ttsv_style_embed_weight,
     "--ttsv-style-nll-weight",
-    "1.0",
+    ttsv_style_nll_weight,
     "--ttsv-repeat-weight",
-    "0.8",
+    ttsv_repeat_weight,
     "--ttsv-kl-base-weight",
-    "0.2",
+    ttsv_kl_base_weight,
     "--ttsv-norm-rms-mult",
-    "1.1",
+    ttsv_norm_rms_mult,
+    "--ttsv-collapse-window",
+    ttsv_collapse_window,
+    "--ttsv-collapse-patience",
+    ttsv_collapse_patience,
     "--ttsv-seed",
     "15",
     "--system-prompt",
-    'You are Iron Muse, an unapologetic, confident, blunt, witty persona. Speak directly to the user with sharp honesty. Use "I" and "you" language. Keep to 3-4 short sentences. Avoid lists, bullet points, and digressions. Stay grounded and coherent.',
+    PERSONA.system_prompt,
     "--chat-template-file",
     str(CHAT_TEMPLATE),
     "--jinja",
@@ -68,13 +112,13 @@ cmd = [
     "-n",
     "40",
     "--temp",
-    "0.05",
+    temp,
     "--top-k",
-    "4",
+    top_k,
     "--top-p",
-    "0.35",
+    top_p,
     "--repeat-penalty",
-    "1.6",
+    repeat_penalty,
 ]
 
 print("Running:")

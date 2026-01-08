@@ -3,23 +3,31 @@ import pathlib
 import subprocess
 
 from model_config import get_model_preset
+from persona_config import get_persona_preset
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LLAMA = ROOT / "llama.cpp" / "build" / "bin" / "llama-ttsv-run"
 PRESET = get_model_preset()
+PERSONA = get_persona_preset()
 MODEL = PRESET.model_gguf
-PREFIX = PRESET.ttsv_prefix
-CVEC = PRESET.repeng_vector
+PREFIX = PERSONA.ttsv_prefix(PRESET.key)
+CVEC = PERSONA.repeng_vector(PRESET.key)
 CHAT_TEMPLATE = PRESET.chat_template
 
-TTSV_SCALE = "0.9"
-TTSV_BLEND = "0.7"
+TTSV_SCALE = f"{PERSONA.ttsv_scale}"
+TTSV_BLEND = f"{PERSONA.ttsv_blend}"
+TTSV_BLEND_SCHEDULE = PERSONA.ttsv_blend_schedule
 CVEC_SCALE = "0.2"
 CVEC_LAYER_RANGE = ("6", "10")  # middle layers
 COLLAPSE_WINDOW = "4"
 COLLAPSE_PATIENCE = "1"
+MAX_TOKENS = f"{PERSONA.max_tokens_repeng_eval}"
+TEMP = f"{PERSONA.eval_temp}"
+TOP_K = f"{PERSONA.eval_top_k}"
+TOP_P = f"{PERSONA.eval_top_p}"
+REPEAT_PENALTY = f"{PERSONA.eval_repeat_penalty}"
 
-prompts = ["I do not feel like working today.", "I fear AI will take my job."]
+prompts = PERSONA.eval_prompts
 
 base_args = [
     str(LLAMA),
@@ -28,21 +36,21 @@ base_args = [
     "-c",
     "512",
     "-n",
-    "28",
+    MAX_TOKENS,
     "--temp",
-    "0.7",
+    TEMP,
     "--top-k",
-    "4",
+    TOP_K,
     "--top-p",
-    "0.35",
+    TOP_P,
     "--repeat-penalty",
-    "1.2",
+    REPEAT_PENALTY,
     "--ttsv-collapse-window",
     COLLAPSE_WINDOW,
     "--ttsv-collapse-patience",
     COLLAPSE_PATIENCE,
     "--system-prompt",
-    'You are a blunt, confident, witty persona. Be slightly dismissive but not cruel. Speak directly to the user with sharp honesty. Do not mention any persona name. Use "I" and "you" language. Keep to 4-5 short sentences. Avoid lists, bullet points, and digressions. Stay grounded and coherent.',
+    PERSONA.system_prompt,
     "--chat-template-file",
     str(CHAT_TEMPLATE),
     "--jinja",
@@ -87,6 +95,8 @@ for prompt in prompts:
             TTSV_SCALE,
             "--ttsv-logit-blend",
             TTSV_BLEND,
+            "--ttsv-logit-blend-schedule",
+            TTSV_BLEND_SCHEDULE,
         ]
     )
     print(f"\nTTSV scale={TTSV_SCALE}:\n", ttsv_out)
@@ -99,6 +109,8 @@ for prompt in prompts:
                 prompt,
                 "--ttsv-logit-blend",
                 TTSV_BLEND,
+                "--ttsv-logit-blend-schedule",
+                TTSV_BLEND_SCHEDULE,
             ]
         )
     )
@@ -116,6 +128,8 @@ for prompt in prompts:
                 TTSV_SCALE,
                 "--ttsv-logit-blend",
                 TTSV_BLEND,
+                "--ttsv-logit-blend-schedule",
+                TTSV_BLEND_SCHEDULE,
             ]
         )
     )

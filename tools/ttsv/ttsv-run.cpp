@@ -8,9 +8,9 @@
 #include "ttsv-common.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <cmath>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -82,11 +82,8 @@ std::string format_prompt(const common_chat_templates * chat_templates,
 }
 
 float control_vector_schedule_multiplier(const common_params & params, int32_t token_idx) {
-    const bool enabled =
-        params.control_vector_schedule_hold > 0 ||
-        params.control_vector_schedule_decay > 0 ||
-        params.control_vector_schedule_start != 1.0f ||
-        params.control_vector_schedule_end != 1.0f;
+    const bool enabled = params.control_vector_schedule_hold > 0 || params.control_vector_schedule_decay > 0 ||
+                         params.control_vector_schedule_start != 1.0f || params.control_vector_schedule_end != 1.0f;
     if (!enabled) {
         return 1.0f;
     }
@@ -106,15 +103,12 @@ float control_vector_schedule_multiplier(const common_params & params, int32_t t
 
     const float frac = static_cast<float>(t) / static_cast<float>(params.control_vector_schedule_decay);
     return params.control_vector_schedule_start +
-        (params.control_vector_schedule_end - params.control_vector_schedule_start) * frac;
+           (params.control_vector_schedule_end - params.control_vector_schedule_start) * frac;
 }
 
 float ttsv_logit_blend_schedule(const common_params & params, int32_t token_idx) {
-    const bool enabled =
-        params.ttsv_logit_blend_hold > 0 ||
-        params.ttsv_logit_blend_decay > 0 ||
-        params.ttsv_logit_blend_start != 1.0f ||
-        params.ttsv_logit_blend_end != 1.0f;
+    const bool enabled = params.ttsv_logit_blend_hold > 0 || params.ttsv_logit_blend_decay > 0 ||
+                         params.ttsv_logit_blend_start != 1.0f || params.ttsv_logit_blend_end != 1.0f;
     if (!enabled) {
         return params.ttsv_logit_blend;
     }
@@ -133,8 +127,7 @@ float ttsv_logit_blend_schedule(const common_params & params, int32_t token_idx)
     }
 
     const float frac = static_cast<float>(t) / static_cast<float>(params.ttsv_logit_blend_decay);
-    return params.ttsv_logit_blend_start +
-        (params.ttsv_logit_blend_end - params.ttsv_logit_blend_start) * frac;
+    return params.ttsv_logit_blend_start + (params.ttsv_logit_blend_end - params.ttsv_logit_blend_start) * frac;
 }
 
 float entropy_from_logits(const float * logits, int n_vocab) {
@@ -149,26 +142,25 @@ float entropy_from_logits(const float * logits, int n_vocab) {
         }
     }
 
-    double sum_exp = 0.0;
+    double sum_exp       = 0.0;
     double sum_exp_logit = 0.0;
     for (int i = 0; i < n_vocab; ++i) {
         const double v = std::exp(static_cast<double>(logits[i]) - max_logit);
         sum_exp += v;
         sum_exp_logit += v * logits[i];
     }
-    const double logsum = std::log(sum_exp) + max_logit;
+    const double logsum     = std::log(sum_exp) + max_logit;
     const double mean_logit = sum_exp_logit / sum_exp;
-    const double entropy = logsum - mean_logit;
+    const double entropy    = logsum - mean_logit;
     return static_cast<float>(entropy);
 }
 
-bool apply_control_vector_scale(
-    llama_context *                     ctx,
-    const common_control_vector_data &  cvec,
-    int32_t                             layer_start,
-    int32_t                             layer_end,
-    float                               scale,
-    std::vector<float> &                scratch) {
+bool apply_control_vector_scale(llama_context *                    ctx,
+                                const common_control_vector_data & cvec,
+                                int32_t                            layer_start,
+                                int32_t                            layer_end,
+                                float                              scale,
+                                std::vector<float> &               scratch) {
     if (ctx == nullptr || cvec.n_embd <= 0 || cvec.data.empty()) {
         return false;
     }
@@ -180,20 +172,11 @@ bool apply_control_vector_scale(
         scratch[i] = cvec.data[i] * scale;
     }
 
-    const int err = llama_apply_adapter_cvec(
-        ctx,
-        scratch.data(),
-        scratch.size(),
-        cvec.n_embd,
-        layer_start,
-        layer_end);
+    const int err = llama_apply_adapter_cvec(ctx, scratch.data(), scratch.size(), cvec.n_embd, layer_start, layer_end);
     return err == 0;
 }
 
-llama_token sample_from_logits(
-    common_sampler *                 sampler,
-    const float *                    logits,
-    std::vector<llama_token_data> &  cur) {
+llama_token sample_from_logits(common_sampler * sampler, const float * logits, std::vector<llama_token_data> & cur) {
     for (size_t i = 0; i < cur.size(); ++i) {
         cur[i] = llama_token_data{ static_cast<llama_token>(i), logits[i], 0.0f };
     }
@@ -227,18 +210,16 @@ int main(int argc, char ** argv) {
         params.n_gpu_layers = 0;
     }
 
-    const bool ttsv_blend_schedule_enabled =
-        params.ttsv_logit_blend_hold > 0 ||
-        params.ttsv_logit_blend_decay > 0 ||
-        params.ttsv_logit_blend_start != 1.0f ||
-        params.ttsv_logit_blend_end != 1.0f;
-    const float ttsv_blend = std::clamp(params.ttsv_logit_blend, 0.0f, 1.0f);
-    const bool  use_logit_blend = ttsv_blend < 0.999f || ttsv_blend_schedule_enabled;
-    common_params params_base = params;
+    const bool ttsv_blend_schedule_enabled = params.ttsv_logit_blend_hold > 0 || params.ttsv_logit_blend_decay > 0 ||
+                                             params.ttsv_logit_blend_start != 1.0f ||
+                                             params.ttsv_logit_blend_end != 1.0f;
+    const float   ttsv_blend      = std::clamp(params.ttsv_logit_blend, 0.0f, 1.0f);
+    const bool    use_logit_blend = ttsv_blend < 0.999f || ttsv_blend_schedule_enabled;
+    common_params params_base     = params;
     if (use_logit_blend) {
         params_base.control_vectors.clear();
         params_base.control_vector_layer_start = -1;
-        params_base.control_vector_layer_end = -1;
+        params_base.control_vector_layer_end   = -1;
     }
 
     std::string prompt = params.prompt;
@@ -270,14 +251,14 @@ int main(int argc, char ** argv) {
     }
 
     common_init_result_ptr llama_init_base;
-    llama_context *        ctx_base   = nullptr;
+    llama_context *        ctx_base = nullptr;
     if (use_logit_blend) {
         llama_init_base = common_init_from_params(params_base);
         if (!llama_init_base || llama_init_base->context() == nullptr || llama_init_base->model() == nullptr) {
             fprintf(stderr, "llama-ttsv-run: failed to load base model for logit blending\n");
             return 1;
         }
-        ctx_base   = llama_init_base->context();
+        ctx_base = llama_init_base->context();
     }
 
     common_chat_templates_ptr chat_templates;
@@ -305,38 +286,36 @@ int main(int argc, char ** argv) {
     }
 
     const int32_t     n_embd         = llama_model_n_embd_inp(model);
-    // const int32_t     max_new_tokens = params.n_predict > 0 ? params.n_predict : 128 * 4;
-    const int32_t     max_new_tokens = 128 * 2;
+    const int32_t     max_new_tokens = params.n_predict > 0 ? params.n_predict : 128 * 4;
+    //const int32_t     max_new_tokens = 128 * 2;
     const std::string formatted      = format_prompt(chat_templates.get(), params, prompt, true);
     auto              prompt_tokens  = common_tokenize(ctx, formatted, true, true);
 
     common_sampler_ptr sampler(common_sampler_init(model, params.sampling));
     common_sampler_reset(sampler.get());
 
-    const int n_vocab = llama_vocab_n_tokens(llama_model_get_vocab(model));
+    const int                     n_vocab = llama_vocab_n_tokens(llama_model_get_vocab(model));
     std::vector<llama_token_data> sample_cur(n_vocab);
-    std::vector<float> blended_logits;
+    std::vector<float>            blended_logits;
     if (use_logit_blend) {
         blended_logits.resize(n_vocab);
     }
 
-    const bool schedule_enabled =
-        params.control_vector_schedule_hold > 0 ||
-        params.control_vector_schedule_decay > 0 ||
-        params.control_vector_schedule_start != 1.0f ||
-        params.control_vector_schedule_end != 1.0f;
-    const bool backoff_enabled =
-        params.control_vector_entropy_floor > 0.0f &&
-        params.control_vector_entropy_backoff_tokens > 0 &&
-        params.control_vector_entropy_backoff_scale >= 0.0f;
-    const bool cvec_dynamic = !params.control_vectors.empty() && (schedule_enabled || backoff_enabled);
+    const bool schedule_enabled = params.control_vector_schedule_hold > 0 || params.control_vector_schedule_decay > 0 ||
+                                  params.control_vector_schedule_start != 1.0f ||
+                                  params.control_vector_schedule_end != 1.0f;
+    const bool backoff_enabled = params.control_vector_entropy_floor > 0.0f &&
+                                 params.control_vector_entropy_backoff_tokens > 0 &&
+                                 params.control_vector_entropy_backoff_scale >= 0.0f;
+    const bool                 cvec_dynamic = !params.control_vectors.empty() && (schedule_enabled || backoff_enabled);
     common_control_vector_data cvec;
-    std::vector<float> cvec_scaled;
-    float current_cvec_scale = 1.0f;
-    int backoff_remaining = 0;
-    const float backoff_scale = std::clamp(params.control_vector_entropy_backoff_scale, 0.0f, 1.0f);
+    std::vector<float>         cvec_scaled;
+    float                      current_cvec_scale = 1.0f;
+    int                        backoff_remaining  = 0;
+    const float                backoff_scale      = std::clamp(params.control_vector_entropy_backoff_scale, 0.0f, 1.0f);
     const int32_t cvec_layer_start = params.control_vector_layer_start > 0 ? params.control_vector_layer_start : 1;
-    const int32_t cvec_layer_end = params.control_vector_layer_end > 0 ? params.control_vector_layer_end : llama_model_n_layer(model);
+    const int32_t cvec_layer_end =
+        params.control_vector_layer_end > 0 ? params.control_vector_layer_end : llama_model_n_layer(model);
 
     if (cvec_dynamic) {
         cvec = common_control_vector_load(params.control_vectors);
@@ -351,7 +330,7 @@ int main(int argc, char ** argv) {
         llama_memory_clear(ctx_base->get_memory(), true);
     }
 
-    llama_pos pos = 0;
+    llama_pos pos      = 0;
     llama_pos pos_base = 0;
 
     if (cvec_dynamic) {
@@ -388,11 +367,11 @@ int main(int argc, char ** argv) {
 
     const llama_token eos = llama_vocab_eos(llama_model_get_vocab(model));
 
-    std::string output;
+    std::string              output;
     std::vector<llama_token> generated;
     generated.reserve(max_new_tokens);
-    int collapse_hits = 0;
-    const int collapse_window = params.ttsv_collapse_window;
+    int       collapse_hits     = 0;
+    const int collapse_window   = params.ttsv_collapse_window;
     const int collapse_patience = params.ttsv_collapse_patience;
     for (int32_t i = 0; i < max_new_tokens; ++i) {
         const float * logits = llama_get_logits_ith(ctx, -1);
@@ -437,15 +416,14 @@ int main(int argc, char ** argv) {
         generated.push_back(id);
 
         // Stop early if we fall into a short token loop.
-        if (collapse_window > 0 && collapse_patience > 0 &&
-            generated.size() >= static_cast<size_t>(collapse_window)) {
-            int unique = 0;
-            llama_token first = LLAMA_TOKEN_NULL;
+        if (collapse_window > 0 && collapse_patience > 0 && generated.size() >= static_cast<size_t>(collapse_window)) {
+            int         unique = 0;
+            llama_token first  = LLAMA_TOKEN_NULL;
             llama_token second = LLAMA_TOKEN_NULL;
             for (size_t j = generated.size() - collapse_window; j < generated.size(); ++j) {
                 const llama_token tok = generated[j];
                 if (unique == 0) {
-                    first = tok;
+                    first  = tok;
                     unique = 1;
                 } else if (tok == first) {
                     continue;

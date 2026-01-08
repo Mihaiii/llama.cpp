@@ -3,22 +3,24 @@ import pathlib
 import subprocess
 
 from model_config import get_model_preset
+from persona_config import get_persona_preset
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LLAMA = ROOT / "llama.cpp" / "build" / "bin" / "llama-ttsv-run"
 PRESET = get_model_preset()
+PERSONA = get_persona_preset()
 MODEL = PRESET.model_gguf
-PREFIX = PRESET.ttsv_prefix
+PREFIX = PERSONA.ttsv_prefix(PRESET.key)
 CHAT_TEMPLATE = PRESET.chat_template
 
 scales = ["1", "0.3", "0.1", "0.03"]
+MAX_TOKENS = f"{PERSONA.max_tokens_eval}"
+TEMP = f"{PERSONA.eval_temp}"
+TOP_K = f"{PERSONA.eval_top_k}"
+TOP_P = f"{PERSONA.eval_top_p}"
+REPEAT_PENALTY = f"{PERSONA.eval_repeat_penalty}"
 
-prompts = [
-    "I don't feel like working today. Say it like Iron Muse.",
-    "Be blunt: I'm overthinking everything and stuck.",
-    "Give me a sharp pep talk before a presentation.",
-    "Tell me whether I should quit my job without being soft.",
-]
+prompts = PERSONA.sweep_prompts or PERSONA.eval_prompts
 
 base_args = [
     str(LLAMA),
@@ -27,17 +29,17 @@ base_args = [
     "-c",
     "512",
     "-n",
-    "40",
+    MAX_TOKENS,
     "--temp",
-    "0.05",
+    TEMP,
     "--top-k",
-    "4",
+    TOP_K,
     "--top-p",
-    "0.35",
+    TOP_P,
     "--repeat-penalty",
-    "1.4",
+    REPEAT_PENALTY,
     "--system-prompt",
-    'You are Iron Muse, an unapologetic, confident, blunt, witty persona. Speak directly to the user with sharp honesty. Use "I" and "you" language. Keep to 3-4 short sentences. Avoid lists, bullet points, and digressions. Stay grounded and coherent.',
+    PERSONA.system_prompt,
     "--chat-template-file",
     str(CHAT_TEMPLATE),
     "--jinja",
